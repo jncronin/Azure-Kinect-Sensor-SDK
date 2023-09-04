@@ -17,6 +17,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
+#include <float.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -250,7 +251,7 @@ static void log_device_info(depth_context_t *depth)
     logger_log(level, __FILE__, __LINE__, "****************************************************");
 }
 
-static inline int GetNFOVData(int x, int y, int frame, uint8_t *restrict image)
+static inline int GetNFOVData(int x, int y, int frame, const uint8_t *restrict image)
 {
     const int frame_width = 640;
     const int frame_height = 576;
@@ -266,7 +267,67 @@ static inline int GetNFOVData(int x, int y, int frame, uint8_t *restrict image)
     return d;
 }
 
-static inline void GetPhase(float *restrict d, float *phase, float *amplitude, float *offset)
+static inline float GetNFOVDistance(const float *restrict phases, float *err)
+{
+    // determined experimentally by measuring phase == 0 points
+    // In MHz to allow calculations to better fit the dynamic range of floats
+    const float f1 = 199000000.0f / 1000000.0f;
+    const float f2 = 188000000.0f / 1000000.0f;
+    const float f3 = 55300000.0f / 1000000.0f;
+
+    // Gives ~5m max range
+    const int f1n = 4;
+    const int f2n = 4;
+    const int f3n = 2;
+
+    float best_err = FLT_MAX;
+    float best_dist = 0.0f;
+
+    int best_i = 0;
+    int best_j = 0;
+    int best_k = 0;
+
+    // brute force algorithm as per https://medium.com/chronoptics-time-of-flight/phase-wrapping-and-its-solution-in-time-of-flight-depth-sensing-493aa8b21c42
+    for(int k = 0; k < f3n; k++)
+    {
+        for(int j = 0; j < f2n; j++)
+        {
+            for(int i = 0; i < f1n; i++)
+            {
+                float d1 = (phases[0] + (float)i * 2.0f * M_PI) / 2.0f / f1;
+                float d2 = (phases[1] + (float)j * 2.0f * M_PI) / 2.0f / f2;
+                float d3 = (phases[2] + (float)k * 2.0f * M_PI) / 2.0f / f3;
+
+                float d_mean = (d1 + d2 + d3) / 3.0f;
+                float d_var = (powf(d1 - d_mean, 2.0f) + powf(d2 - d_mean, 2.0f) + powf(d3 - d_mean, 2.0f)) / 3.0f;
+
+                //printf("%i,%i,%i: %f,%f,%f (%f)\n",
+                //    i, j, k, d1, d2, d3, sq_err);
+                if(d_var < best_err)
+                {
+                    best_err = d_var;
+                    best_dist = d_mean;
+                    best_i = i;
+                    best_j = j;
+                    best_k = k;
+                }
+            }
+        }
+    }
+
+    if(err)
+    {
+        *err = best_err;
+    }
+
+    best_dist *= 300.0f / 2.0f / M_PI;      // c / 10e6 to account for freq in MHz
+
+    printf("%i,%i,%i: %f (%f)\n", best_i, best_j, best_k, best_dist, best_err);
+
+    return best_dist;
+}
+
+static inline void GetPhase(const float *restrict d, float *phase, float *amplitude, float *offset)
 {
     // See https://math.stackexchange.com/questions/118526/fitting-a-sine-wave-of-known-frequency-through-three-points
     float c = (d[0] + d[2]) / 2.0f;
@@ -317,16 +378,28 @@ void depth_capture_available(k4a_result_t cb_result, k4a_image_t image_raw, void
     float phases[3];
     float d[9];
 
+    int x = 320;
+    int y = 288;
+
     for(int i = 0; i < 9; i++)
     {
-        d[i] = GetNFOVData(320, 288, i, image_get_buffer(image_raw));
+        d[i] = GetNFOVData(x, y, i, image_get_buffer(image_raw));
     }
     for(int i = 0; i < 3; i++)
     {
         GetPhase(&d[i * 3], &phases[i], NULL, NULL);
     }
+    // Apply a fiddle factor based upon experimentation to account for time delay
+    //  between imaging each column of the IR image
+    phases[0] = fmodf(phases[0] - 2.7f * (float)x / 200.0f, M_PI * 2.0f);
+    phases[1] = fmodf(phases[1] - 2.55f * (float)x / 200.0f, M_PI * 2.0f);
+    phases[2] = fmodf(phases[2] - 1.05f * (float)x / 200.0f, M_PI * 2.0f);
+    if(phases[0] < 0.0f) phases[0] += M_PI * 2.0f;
+    if(phases[1] < 0.0f) phases[1] += M_PI * 2.0f;
+    if(phases[2] < 0.0f) phases[2] += M_PI * 2.0f;
 
-    printf("Phases: %f, %f, %f\n", phases[0], phases[1], phases[2]);
+    printf("Phases: %f, %f, %f, dist: %f\n", phases[0], phases[1], phases[2],
+        GetNFOVDistance(phases, NULL));
 
     
 
