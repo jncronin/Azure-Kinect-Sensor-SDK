@@ -10,6 +10,7 @@ add_subdirectory(streaming)
 add_subdirectory(transformation)
 add_subdirectory(undistort)
 add_subdirectory(viewer)
+add_subdirectory(depthrun)
 
 if (OpenCV_REQUIRED)
     find_package(OpenCV REQUIRED)

@@ -16,6 +16,7 @@
 // System dependencies
 #include <stdlib.h>
 #include <stdio.h>
+#include <math.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -249,6 +250,44 @@ static void log_device_info(depth_context_t *depth)
     logger_log(level, __FILE__, __LINE__, "****************************************************");
 }
 
+static inline int GetNFOVData(int x, int y, int frame, uint8_t *restrict image)
+{
+    const int frame_width = 640;
+    const int frame_height = 576;
+    const int frame_stride = frame_width * 8 / 5;
+    int offset = ((frame + 1) % 4) * frame_stride / 4;
+    int block_of_8 = x / 5;
+    int line_idx = offset + block_of_8 * 8 + x % 5;
+    int idx = y * frame_stride + frame * frame_height * frame_stride + line_idx;
+    
+    int d = (int)image[idx];
+    if(d >= 64)
+        d = 64 - d;
+    return d;
+}
+
+static inline void GetPhase(float *restrict d, float *phase, float *amplitude, float *offset)
+{
+    // See https://math.stackexchange.com/questions/118526/fitting-a-sine-wave-of-known-frequency-through-three-points
+    float c = (d[0] + d[2]) / 2.0f;
+    if(offset)
+    {
+        *offset = c;
+    }
+
+    if(amplitude)
+    {
+        float a = sqrtf(powf(d[0] - c, 2.0f) + powf(d[1] - c, 2.0f));
+        *amplitude = a;
+    }
+
+    if(phase)
+    {
+        float b = atan2f(d[0] - c, d[1] - c);
+        *phase = b;
+    }
+}
+
 /** see documentation for depthmcu_stream_cb_t
  *
  * \related depthmcu_stream_cb_t
@@ -273,12 +312,21 @@ void depth_capture_available(k4a_result_t cb_result, k4a_image_t image_raw, void
     }
 
     // post-capture goes here
-    static int captid = 0;
-    char fname[128];
-    sprintf(fname, "capt-%i.bin", captid++);
-    FILE *fd = fopen(fname, "w");
-    fwrite(image_get_buffer(image_raw), image_get_size(image_raw), 1, fd);
-    fclose(fd);
+    
+    // for testing, dump phase of middle pixel at all 3 frequencies
+    float phases[3];
+    float d[9];
+
+    for(int i = 0; i < 9; i++)
+    {
+        d[i] = GetNFOVData(320, 288, i, image_get_buffer(image_raw));
+    }
+    for(int i = 0; i < 3; i++)
+    {
+        GetPhase(&d[i * 3], &phases[i], NULL, NULL);
+    }
+
+    printf("Phases: %f, %f, %f\n", phases[0], phases[1], phases[2]);
 
     
 

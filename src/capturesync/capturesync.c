@@ -137,9 +137,9 @@ drop_sample(capturesync_context_t *sync, k4a_wait_result_t *wresult, bool color_
 static void replace_sample(capturesync_context_t *sync, k4a_capture_t capture_new, frame_info_t *frame_info)
 {
     // Log the capture being dropped
-    LOG_ERROR("capturesync_drop, releasing capture early due to full queue TS:%10lld type:%s",
+    /*LOG_ERROR("capturesync_drop, releasing capture early due to full queue TS:%10lld type:%s",
               frame_info->ts,
-              frame_info->color_capture ? "Color" : "Depth");
+              frame_info->color_capture ? "Color" : "Depth");*/
 
     if (!sync->synchronized_images_only)
     {
