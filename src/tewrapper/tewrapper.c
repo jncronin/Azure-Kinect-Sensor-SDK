@@ -49,30 +49,15 @@ K4A_DECLARE_CONTEXT(tewrapper_t, tewrapper_context_t);
 
 static k4a_result_t transform_engine_start_helper(tewrapper_context_t *tewrapper)
 {
-    assert(tewrapper->transform_engine == NULL);
-
-    k4a_depth_engine_result_code_t teresult =
-        deloader_transform_engine_create_and_initialize(&tewrapper->transform_engine,
-                                                        tewrapper->transform_engine_calibration,
-                                                        NULL,  // Callback
-                                                        NULL); // Callback Context
-    if (teresult != K4A_DEPTH_ENGINE_RESULT_SUCCEEDED)
-    {
-        LOG_ERROR("Transform engine create and initialize failed with error code: %d.", teresult);
-        if (teresult == K4A_DEPTH_ENGINE_RESULT_FATAL_ERROR_GPU_OPENGL_CONTEXT)
-        {
-            LOG_ERROR("OpenGL 4.4 context creation failed. You could try updating your graphics drivers.", 0);
-        }
-    }
-
-    return K4A_RESULT_FROM_BOOL(teresult == K4A_DEPTH_ENGINE_RESULT_SUCCEEDED);
+    (void)tewrapper;
+    return K4A_RESULT_SUCCEEDED;
 }
 
 static void transform_engine_stop_helper(tewrapper_context_t *tewrapper)
 {
     if (tewrapper->transform_engine != NULL)
     {
-        deloader_transform_engine_destroy(&tewrapper->transform_engine);
+        //deloader_transform_engine_destroy(&tewrapper->transform_engine);
         tewrapper->transform_engine = NULL;
     }
 }
@@ -106,76 +91,7 @@ static int transform_engine_thread(void *param)
 
         if (tewrapper->thread_stop == false)
         {
-            if (K4A_SUCCEEDED(result))
-            {
-                if (tewrapper->type == K4A_TRANSFORM_ENGINE_TYPE_DEPTH_TO_COLOR ||
-                    tewrapper->type == K4A_TRANSFORM_ENGINE_TYPE_COLOR_TO_DEPTH)
-                {
-                    size_t transform_engine_output_buffer_size =
-                        deloader_transform_engine_get_output_frame_size(tewrapper->transform_engine, tewrapper->type);
-                    if (tewrapper->transformed_image_size != transform_engine_output_buffer_size)
-                    {
-                        LOG_ERROR("Transform engine output buffer size not expected. Expect: %d, Actual: %d.",
-                                  transform_engine_output_buffer_size,
-                                  tewrapper->transformed_image_size);
-                        result = K4A_RESULT_FAILED;
-                    }
-                }
-                else if (tewrapper->type == K4A_TRANSFORM_ENGINE_TYPE_DEPTH_CUSTOM8_TO_COLOR ||
-                         tewrapper->type == K4A_TRANSFORM_ENGINE_TYPE_DEPTH_CUSTOM16_TO_COLOR)
-                {
-                    size_t transform_engine_output_buffer_size =
-                        deloader_transform_engine_get_output_frame_size(tewrapper->transform_engine,
-                                                                        K4A_TRANSFORM_ENGINE_TYPE_DEPTH_TO_COLOR);
-                    if (tewrapper->transformed_image_size != transform_engine_output_buffer_size)
-                    {
-                        LOG_ERROR("Transform engine output buffer size not expected. Expect: %d, Actual: %d.",
-                                  transform_engine_output_buffer_size,
-                                  tewrapper->transformed_image_size);
-                        result = K4A_RESULT_FAILED;
-                    }
-
-                    size_t transform_engine_output_buffer2_size =
-                        deloader_transform_engine_get_output_frame_size(tewrapper->transform_engine, tewrapper->type);
-                    if (tewrapper->transformed_image2_size != transform_engine_output_buffer2_size)
-                    {
-                        LOG_ERROR("Transform engine output buffer 2 size not expected. Expect: %d, Actual: %d.",
-                                  transform_engine_output_buffer2_size,
-                                  tewrapper->transformed_image2_size);
-                        result = K4A_RESULT_FAILED;
-                    }
-                }
-            }
-
-            if (K4A_SUCCEEDED(result))
-            {
-                k4a_depth_engine_result_code_t teresult =
-                    deloader_transform_engine_process_frame(tewrapper->transform_engine,
-                                                            tewrapper->type,
-                                                            tewrapper->depth_image_data,
-                                                            tewrapper->depth_image_size,
-                                                            tewrapper->image2_data,
-                                                            tewrapper->image2_size,
-                                                            tewrapper->transformed_image_data,
-                                                            tewrapper->transformed_image_size,
-                                                            tewrapper->transformed_image2_data,
-                                                            tewrapper->transformed_image2_size,
-                                                            tewrapper->interpolation,
-                                                            tewrapper->invalid_value);
-                if (teresult == K4A_DEPTH_ENGINE_RESULT_FATAL_ERROR_WAIT_PROCESSING_COMPLETE_FAILED ||
-                    teresult == K4A_DEPTH_ENGINE_RESULT_FATAL_ERROR_GPU_TIMEOUT)
-                {
-                    LOG_ERROR("Timeout during depth engine process frame.", 0);
-                    LOG_ERROR("SDK should be restarted since it looks like GPU has encountered an unrecoverable error.",
-                              0);
-                    result = K4A_RESULT_FAILED;
-                }
-                else if (teresult != K4A_DEPTH_ENGINE_RESULT_SUCCEEDED)
-                {
-                    LOG_ERROR("Transform engine process frame failed with error code: %d.", teresult);
-                    result = K4A_RESULT_FAILED;
-                }
-            }
+            result = K4A_RESULT_FAILED;
         }
 
         // Notify the API thread that transform engine thread completed a frame processing

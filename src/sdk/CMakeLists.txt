@@ -46,7 +46,6 @@ target_link_libraries(k4a PRIVATE
     k4ainternal::color
     k4ainternal::color_mcu
     k4ainternal::depth
-    k4ainternal::dewrapper
     k4ainternal::depth_mcu
     k4ainternal::image
     k4ainternal::imu
