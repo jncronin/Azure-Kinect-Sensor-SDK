@@ -3,6 +3,7 @@
 
 add_library(k4a_depth STATIC 
             depth.c
+            depthengine.c
             )
 
 if (K4A_MTE_VERSION)
