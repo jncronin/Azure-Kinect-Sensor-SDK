@@ -8,8 +8,8 @@ add_library(k4a_depth STATIC
             depthengine.c
             )
 
-if(OpenMP_C_FOUND)
-    target_link_libraries(k4a_depth PRIVATE OpenMP::OpenMP_C)
+if(OpenMP_CXX_FOUND)
+    target_link_libraries(k4a_depth PRIVATE OpenMP::OpenMP_CXX)
 endif()
 
 if (K4A_MTE_VERSION)
