@@ -1,10 +1,16 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT License.
 
+find_package(OpenMP)
+
 add_library(k4a_depth STATIC 
             depth.c
             depthengine.c
             )
+
+if(OpenMP_C_FOUND)
+    target_link_libraries(k4a_depth PRIVATE OpenMP::OpenMP_C)
+endif()
 
 if (K4A_MTE_VERSION)
     target_compile_definitions(k4a_depth PRIVATE K4A_MTE_VERSION)

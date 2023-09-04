@@ -170,6 +170,7 @@ void depthengine_process_frame(k4a_capture_t capture_raw, const depthengine_t *d
     uint16_t *ir_data = (uint16_t *)image_get_buffer(ir_image);
     uint16_t *depth_data = (uint16_t *)image_get_buffer(depth_image);
 
+#pragma omp parallel for
     for(int y = 0; y < de->frame_height; y += de->ybin)
     {
         for(int x = 0; x < de->frame_width; x += de->xbin)
