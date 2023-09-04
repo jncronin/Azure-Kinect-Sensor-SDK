@@ -322,7 +322,10 @@ static inline float GetNFOVDistance(const float *restrict phases, float *err)
 
     best_dist *= 300.0f / 2.0f / M_PI;      // c / 10e6 to account for freq in MHz
 
-    printf("%i,%i,%i: %f (%f)\n", best_i, best_j, best_k, best_dist, best_err);
+    (void)best_i;
+    (void)best_j;
+    (void)best_k;
+    //printf("%i,%i,%i: %f (%f)\n", best_i, best_j, best_k, best_dist, best_err);
 
     return best_dist;
 }
@@ -365,49 +368,116 @@ void depth_capture_available(k4a_result_t cb_result, k4a_image_t image_raw, void
         cb_result = TRACE_CALL(capture_create(&capture_raw));
     }
 
-    if (K4A_SUCCEEDED(cb_result))
-    {
-        (void)image_raw;
-        capture_set_ir_image(capture_raw, image_raw);
-        capture_set_depth_image(capture_raw, image_raw);
-    }
-
     // post-capture goes here
+
+    // create output images
+    int frame_width = 640;
+    int frame_height = 576;
+    int frame_stride = frame_width;
+    k4a_image_t ir_image, depth_image;
+    cb_result = image_create(K4A_IMAGE_FORMAT_DEPTH16,
+        frame_width, frame_height, frame_width * 2, ALLOCATION_SOURCE_USER, &depth_image);
+    if(!K4A_SUCCEEDED(cb_result))
+    {
+        LOG_ERROR("Could not create output depth image %d", cb_result);
+    };
+
+    cb_result = image_create(K4A_IMAGE_FORMAT_IR16,
+        frame_width, frame_height, frame_width * 2, ALLOCATION_SOURCE_USER, &ir_image);
+    if(!K4A_SUCCEEDED(cb_result))
+    {
+        LOG_ERROR("Could not create ir output depth image %d", cb_result);
+    }
+
+    /* This is what I think is happening, based upon
+    https://www.reddit.com/r/computervision/comments/wh8bhu/questions_about_the_operating_principle_of_the/
     
-    // for testing, dump phase of middle pixel at all 3 frequencies
-    float phases[3];
-    float d[9];
+        The IR camera captures 9 images per frame.  The images are offset on the x-axis in the order
+        (for NFOV unbinned): 1/4, 1/2, 3/4
+            0/4, 1/4, 2/4
+            3/4, 0/4, 1/4
+        I am not sure why but they probably just represent the phase differences seen below
 
-    int x = 320;
-    int y = 288;
+        The data format is also odd.  In every 8 byte block, the first 5 seem to be useful data,
+        then there are an additional 2 1/2 bytes (i.e. 20 bits) that do vary with the image but
+        I cannot find out exactly how.
+        Anyhow, for NFOV unbinned the image stride is 1024 pixels, and 1024 * 5/8 = 640 which
+        seems to fit.
 
-    for(int i = 0; i < 9; i++)
+        Also, the results are better if all of those values >= 64 are treated as negative,
+         but an odd negative (not 1- or 2-complement).  We use the transform if(d>= 64) d = 64 - d
+    
+        During each set of three images, the emitted NIR light is amplitude modulated, and the captures
+        occur at 90degree phase offsets.  Thus for each set of three points we can fit a sine wave.
+        
+        The three sets have the emitted NIR flashing at a different frequency, thus range ambiguity
+        can be solved by finding the result of (phase + x * 2 pi) for each 3 where they all agree
+        the closest.
+        
+        There is a MS implementation but it is patented.  Therefore use a brute-force approach instead. */
+    
+    int xbin = 8;   // skip pixels to reduce processing requirements - should be a factor of frame_width
+    int ybin = 8;
+    uint16_t *ir_data = (uint16_t *)image_get_buffer(ir_image);
+    uint16_t *depth_data = (uint16_t *)image_get_buffer(depth_image);
+
+    for(int y = 0; y < frame_height; y += ybin)
     {
-        d[i] = GetNFOVData(x, y, i, image_get_buffer(image_raw));
-    }
-    for(int i = 0; i < 3; i++)
-    {
-        GetPhase(&d[i * 3], &phases[i], NULL, NULL);
-    }
-    // Apply a fiddle factor based upon experimentation to account for time delay
-    //  between imaging each column of the IR image
-    phases[0] = fmodf(phases[0] - 2.7f * (float)x / 200.0f, M_PI * 2.0f);
-    phases[1] = fmodf(phases[1] - 2.55f * (float)x / 200.0f, M_PI * 2.0f);
-    phases[2] = fmodf(phases[2] - 1.05f * (float)x / 200.0f, M_PI * 2.0f);
-    if(phases[0] < 0.0f) phases[0] += M_PI * 2.0f;
-    if(phases[1] < 0.0f) phases[1] += M_PI * 2.0f;
-    if(phases[2] < 0.0f) phases[2] += M_PI * 2.0f;
+        for(int x = 0; x < frame_width; x += xbin)
+        {
+            float phases[3];
+            float offsets[3];
+            float d[9];
 
-    printf("Phases: %f, %f, %f, dist: %f\n", phases[0], phases[1], phases[2],
-        GetNFOVDistance(phases, NULL));
+            for(int i = 0; i < 9; i++)
+            {
+                d[i] = GetNFOVData(x, y, i, image_get_buffer(image_raw));
+            }
+            for(int i = 0; i < 3; i++)
+            {
+                GetPhase(&d[i * 3], &phases[i], NULL, &offsets[i]);
+            }
+            // Apply a fiddle factor based upon experimentation to account for time delay
+            //  between imaging each column of the IR image
+            phases[0] = fmodf(phases[0] - 2.7f * (float)x / 200.0f, M_PI * 2.0f);
+            phases[1] = fmodf(phases[1] - 2.55f * (float)x / 200.0f, M_PI * 2.0f);
+            phases[2] = fmodf(phases[2] - 1.05f * (float)x / 200.0f, M_PI * 2.0f);
+            if(phases[0] < 0.0f) phases[0] += M_PI * 2.0f;
+            if(phases[1] < 0.0f) phases[1] += M_PI * 2.0f;
+            if(phases[2] < 0.0f) phases[2] += M_PI * 2.0f;
 
+            float dist = GetNFOVDistance(phases, NULL);
+            float irf = fabsf((offsets[0] + offsets[1] + offsets[2]) / 3.0f / dist / dist * 1000.0f);
+            
+            uint16_t depth_val = (uint16_t)(dist * 1000.0f); // mm distance
+            uint16_t ir_val = (uint16_t)irf;
+            for(int j = 0; j < ybin; j++)
+            {
+                for(int i = 0; i < xbin; i++)
+                {
+                    ir_data[x + i + (y + j) * frame_stride] = ir_val;
+                    depth_data[x + i + (y + j) * frame_stride] = depth_val;
+                }
+            }
+
+            //printf("Phases: %f, %f, %f, dist: %f\n", phases[0], phases[1], phases[2],
+            //    GetNFOVDistance(phases, NULL));
+
+        }
+    }
+
+    image_set_device_timestamp_usec(ir_image,
+        image_get_device_timestamp_usec(image_raw));
+    image_set_system_timestamp_nsec(ir_image,
+        image_get_system_timestamp_nsec(image_raw));
+    capture_set_ir_image(capture_raw, ir_image);
+    capture_set_depth_image(capture_raw, depth_image);
     
 
     if (depth->capture_ready_cb)
     {
         depth->capture_ready_cb(cb_result, capture_raw, depth->capture_ready_cb_context);
     }
-    
 
     if (capture_raw)
     {
