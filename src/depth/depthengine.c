@@ -120,6 +120,93 @@ static inline void GetPhase(const float *restrict d, float *phase, float *amplit
     }
 }
 
+void DeinitNFOVUnbinnedCalculation();
+void InitNFOVUnbinnedCalculation();
+void RunNFOVUnbinnedCalculation(unsigned short int* depth_out,
+    unsigned short int* ir_out,
+    const unsigned char* data);
+
+void CPURunNFOVUnbinnedCalculation(unsigned short int* depth_out,
+    unsigned short int* ir_out,
+    const unsigned char* data,
+    const depthengine_t* de)
+{
+    for(int y = 0; y < de->frame_height; y += de->ybin)
+    {
+        for(int x = 0; x < de->frame_width; x += de->xbin)
+        {
+            float phases[3];
+            float offsets[3];
+            float d[9];
+
+            for(int i = 0; i < 9; i++)
+            {
+                d[i] = GetNFOVData(x, y, i, data);
+            }
+            for(int i = 0; i < 3; i++)
+            {
+                GetPhase(&d[i * 3], &phases[i], NULL, &offsets[i]);
+            }
+            // Apply a fiddle factor based upon experimentation to account for time delay
+            //  between imaging each column of the IR image
+            phases[0] = fmodf(phases[0] - 2.7f * (float)x / 200.0f, M_PI * 2.0f);
+            phases[1] = fmodf(phases[1] - 2.55f * (float)x / 200.0f, M_PI * 2.0f);
+            phases[2] = fmodf(phases[2] - 1.05f * (float)x / 200.0f, M_PI * 2.0f);
+            if(phases[0] < 0.0f) phases[0] += M_PI * 2.0f;
+            if(phases[1] < 0.0f) phases[1] += M_PI * 2.0f;
+            if(phases[2] < 0.0f) phases[2] += M_PI * 2.0f;
+
+            float dist = GetNFOVDistance(phases, NULL);
+            //float dist = 1.0f;
+            float irf = fabsf((offsets[0] + offsets[1] + offsets[2]) / 3.0f / dist / dist * 1000.0f);
+            
+            uint16_t depth_val = (uint16_t)(dist * 1000.0f); // mm distance
+            uint16_t ir_val = (uint16_t)irf;
+            for(int j = 0; j < de->ybin; j++)
+            {
+                for(int i = 0; i < de->xbin; i++)
+                {
+                    ir_out[x + i + (y + j) * de->frame_width] = ir_val;
+                    depth_out[x + i + (y + j) * de->frame_width] = depth_val;
+                }
+            }
+
+            //printf("Phases: %f, %f, %f, dist: %f\n", phases[0], phases[1], phases[2],
+            //    GetNFOVDistance(phases, NULL));
+
+        }
+    }
+
+    // dump phase of middle pixel
+    {
+        int x = 320;
+        int y = 288;
+
+        float phases[3];
+        float offsets[3];
+        float d[9];
+
+        for(int i = 0; i < 9; i++)
+        {
+            d[i] = GetNFOVData(x, y, i, data);
+        }
+        for(int i = 0; i < 3; i++)
+        {
+            GetPhase(&d[i * 3], &phases[i], NULL, &offsets[i]);
+        }
+        // Apply a fiddle factor based upon experimentation to account for time delay
+        //  between imaging each column of the IR image
+        phases[0] = fmodf(phases[0] - 2.7f * (float)x / 200.0f, M_PI * 2.0f);
+        phases[1] = fmodf(phases[1] - 2.55f * (float)x / 200.0f, M_PI * 2.0f);
+        phases[2] = fmodf(phases[2] - 1.05f * (float)x / 200.0f, M_PI * 2.0f);
+        if(phases[0] < 0.0f) phases[0] += M_PI * 2.0f;
+        if(phases[1] < 0.0f) phases[1] += M_PI * 2.0f;
+        if(phases[2] < 0.0f) phases[2] += M_PI * 2.0f;
+
+        printf("P1: %f, P2: %f, P3: %f\n", phases[0], phases[1], phases[2]);
+    }
+}
+
 void depthengine_process_frame(k4a_capture_t capture_raw, const depthengine_t *de)
 {
     k4a_image_t image_raw = capture_get_ir_image(capture_raw);
@@ -170,51 +257,9 @@ void depthengine_process_frame(k4a_capture_t capture_raw, const depthengine_t *d
     uint16_t *ir_data = (uint16_t *)image_get_buffer(ir_image);
     uint16_t *depth_data = (uint16_t *)image_get_buffer(depth_image);
 
-    for(int y = 0; y < de->frame_height; y += de->ybin)
-    {
-        for(int x = 0; x < de->frame_width; x += de->xbin)
-        {
-            float phases[3];
-            float offsets[3];
-            float d[9];
-
-            for(int i = 0; i < 9; i++)
-            {
-                d[i] = GetNFOVData(x, y, i, image_get_buffer(image_raw));
-            }
-            for(int i = 0; i < 3; i++)
-            {
-                GetPhase(&d[i * 3], &phases[i], NULL, &offsets[i]);
-            }
-            // Apply a fiddle factor based upon experimentation to account for time delay
-            //  between imaging each column of the IR image
-            phases[0] = fmodf(phases[0] - 2.7f * (float)x / 200.0f, M_PI * 2.0f);
-            phases[1] = fmodf(phases[1] - 2.55f * (float)x / 200.0f, M_PI * 2.0f);
-            phases[2] = fmodf(phases[2] - 1.05f * (float)x / 200.0f, M_PI * 2.0f);
-            if(phases[0] < 0.0f) phases[0] += M_PI * 2.0f;
-            if(phases[1] < 0.0f) phases[1] += M_PI * 2.0f;
-            if(phases[2] < 0.0f) phases[2] += M_PI * 2.0f;
-
-            float dist = GetNFOVDistance(phases, NULL);
-            float irf = fabsf((offsets[0] + offsets[1] + offsets[2]) / 3.0f / dist / dist * 1000.0f);
-            
-            uint16_t depth_val = (uint16_t)(dist * 1000.0f); // mm distance
-            uint16_t ir_val = (uint16_t)irf;
-            for(int j = 0; j < de->ybin; j++)
-            {
-                for(int i = 0; i < de->xbin; i++)
-                {
-                    ir_data[x + i + (y + j) * de->frame_width] = ir_val;
-                    depth_data[x + i + (y + j) * de->frame_width] = depth_val;
-                }
-            }
-
-            //printf("Phases: %f, %f, %f, dist: %f\n", phases[0], phases[1], phases[2],
-            //    GetNFOVDistance(phases, NULL));
-
-        }
-    }
-
+    //CPURunNFOVUnbinnedCalculation(depth_data, ir_data, image_get_buffer(image_raw), de);
+    RunNFOVUnbinnedCalculation(depth_data, ir_data, image_get_buffer(image_raw));
+    
     k4a_capture_t c;
     capture_create(&c);
     image_set_device_timestamp_usec(ir_image,
@@ -302,6 +347,7 @@ void depthengine_start(depthengine_t *de, const k4a_device_configuration_t *conf
         case K4A_DEPTH_MODE_NFOV_UNBINNED:
             de->frame_width = 640;
             de->frame_height = 576;
+            InitNFOVUnbinnedCalculation();
             break;
 
         default:
@@ -355,6 +401,15 @@ void depthengine_stop(depthengine_t *de)
         ThreadAPI_Join(de->thread, &result);
         (void)result;
         de->thread = NULL;
+    }
+    switch(de->dmode)
+    {
+        case K4A_DEPTH_MODE_NFOV_UNBINNED:
+            DeinitNFOVUnbinnedCalculation();
+            break;
+
+        default:
+            break;
     }
 }
 

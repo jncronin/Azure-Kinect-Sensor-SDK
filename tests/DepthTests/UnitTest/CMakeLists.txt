@@ -3,12 +3,16 @@
 
 add_executable(depth_ut depth_ut.cpp)
 
+find_package(CUDAToolkit)
+
 target_link_libraries(depth_ut PRIVATE
     k4ainternal::utcommon
 
     # Link k4ainternal::depth without transitive dependencies
     $<TARGET_FILE:k4ainternal::depth>
     # Link the dependencies of k4ainternal::depth that we do not mock
+    CUDA::cudart
+    CUDA::cuda_driver
     k4ainternal::calibration
     k4ainternal::image
     k4ainternal::logging
