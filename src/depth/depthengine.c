@@ -124,7 +124,8 @@ void DeinitNFOVUnbinnedCalculation();
 void InitNFOVUnbinnedCalculation();
 void RunNFOVUnbinnedCalculation(unsigned short int* depth_out,
     unsigned short int* ir_out,
-    const unsigned char* data);
+    const unsigned char* data,
+    int xbin, int ybin);
 
 void CPURunNFOVUnbinnedCalculation(unsigned short int* depth_out,
     unsigned short int* ir_out,
@@ -258,7 +259,7 @@ void depthengine_process_frame(k4a_capture_t capture_raw, const depthengine_t *d
     uint16_t *depth_data = (uint16_t *)image_get_buffer(depth_image);
 
     //CPURunNFOVUnbinnedCalculation(depth_data, ir_data, image_get_buffer(image_raw), de);
-    RunNFOVUnbinnedCalculation(depth_data, ir_data, image_get_buffer(image_raw));
+    RunNFOVUnbinnedCalculation(depth_data, ir_data, image_get_buffer(image_raw), de->xbin, de->ybin);
     
     k4a_capture_t c;
     capture_create(&c);
@@ -311,11 +312,11 @@ static int depthengine_thread(void *param)
                 LOG_WARNING("Depth image processing is too slow at %lldms, xbin=%d, ybin=%d (this may be transient).",
                             stop_time - start_time, de->xbin, de->ybin);
 
-                if((de->frame_width % (de->xbin * 2)) == 0)
+                if((de->frame_width % (de->xbin * 2)) == 0 && de->xbin < 8)
                 {
                     de->xbin *= 2;
                 }
-                if((de->frame_height % (de->ybin * 2)) == 0)
+                if((de->frame_height % (de->ybin * 2)) == 0 && de->ybin < 8)
                 {
                     de->ybin *= 2;
                 }

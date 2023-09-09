@@ -109,7 +109,8 @@ const int NFOVUnbinned_out_count = 640 * 576;
 
 __global__ void NFOVUnbinnedKernel(unsigned short int* depth_out,
     unsigned short int* ir_out,
-    const unsigned char* data
+    const unsigned char* data,
+    int xbin, int ybin
 #if PROFILE    
     , unsigned int *dev_times1, unsigned int *dev_times2, unsigned int *dev_times3
 #endif
@@ -120,8 +121,10 @@ __global__ void NFOVUnbinnedKernel(unsigned short int* depth_out,
     const int frame_width = 640;
     const int frame_height = 576;
 
-    int x = outidx % frame_width;
-    int y = outidx / frame_width;
+    int x = (outidx % (frame_width / xbin)) * xbin;
+    int y = (outidx / (frame_width / xbin)) * ybin;
+
+    outidx = x + y * frame_width;
 
     float phases[3];
     float offsets[3];
@@ -174,8 +177,16 @@ __global__ void NFOVUnbinnedKernel(unsigned short int* depth_out,
 
     unsigned short mask = (unsigned short)(mask_lens * mask_err * mask_amp);
 
-    depth_out[outidx] = depth_val * mask;
-    ir_out[outidx] = ir_val;
+    depth_val *= mask;
+
+    for(int j = 0; j < ybin; j++)
+    {
+        for(int i = 0; i < xbin; i++)
+        {
+            depth_out[outidx + i + j * frame_width] = depth_val;
+            ir_out[outidx + i + j * frame_width] = ir_val;
+        }
+    }
 
     PROFILE_END(1);
 }
@@ -196,7 +207,8 @@ extern "C" {
 // Function to call the kernel
 void RunNFOVUnbinnedCalculation(unsigned short int* depth_out,
     unsigned short int* ir_out,
-    const unsigned char* data)
+    const unsigned char* data,
+    int xbin, int ybin)
 {
     // TODO: add error checking here
     cudaError_t cudaStatus = cudaMemcpy(dev_data, data, NFOVUnbinned_in_count * sizeof(unsigned char), cudaMemcpyHostToDevice);
@@ -205,7 +217,8 @@ void RunNFOVUnbinnedCalculation(unsigned short int* depth_out,
         return;
     }
 
-    NFOVUnbinnedKernel <<<NFOVUnbinned_out_count / nthreads, nthreads>>> (dev_depth_out, dev_ir_out, dev_data
+    NFOVUnbinnedKernel <<<NFOVUnbinned_out_count / nthreads / xbin / ybin, nthreads>>> (dev_depth_out, dev_ir_out, dev_data,
+        xbin, ybin
 #if PROFILE
         , dev_times1, dev_times2, dev_times3
 #endif
