@@ -8,26 +8,17 @@
 #include <stdlib.h>
 #include <time.h>
 
-#define E_PI 3.1415926535897932384626433832795028841971693993751058209749445923078164062
-
-
-cudaError_t addWithCuda(int *c, const int *a, const int *b, unsigned int size);
+#define E_PI 3.141592f
 
 #define PROFILE 0
-
-__global__ void addKernel(int *c, const int *a, const int *b)
-{
-    int i = threadIdx.x;
-    c[i] = a[i] + b[i];
-}
 
 __device__ static void GetPhase(const float* d, float* phase, float* amplitude, float* offset)
 {
     // See https://math.stackexchange.com/questions/118526/fitting-a-sine-wave-of-known-frequency-through-three-points
     float c = (d[0] + d[2]) / 2.0f;
     *offset = c;
-    //float a = sqrtf(powf(d[0] - c, 2.0f) + powf(d[1] - c, 2.0f));
-    //*amplitude = a;
+    float a = sqrtf((d[0] - c) * (d[0] - c) + (d[1] - c) * (d[1] - c));
+    *amplitude = a;
     float b = atan2f(d[0] - c, d[1] - c);
     *phase = b;
 }
@@ -68,10 +59,6 @@ __device__ static inline float GetNFOVDistance(const float* phases, float* err)
     float best_err = FLT_MAX;
     float best_dist = 0.0f;
 
-    int best_i = 0;
-    int best_j = 0;
-    int best_k = 0;
-
     // brute force algorithm as per https://medium.com/chronoptics-time-of-flight/phase-wrapping-and-its-solution-in-time-of-flight-depth-sensing-493aa8b21c42
     for (int k = 0; k <= f3n; k++)
     {
@@ -79,54 +66,30 @@ __device__ static inline float GetNFOVDistance(const float* phases, float* err)
         {
             for (int i = 0; i <= f1n; i++)
             {
-                //float d1 = (phases[0] + (float)i * 2.0f * E_PI) / 2.0f / f1;
-                //float d2 = (phases[1] + (float)j * 2.0f * E_PI) / 2.0f / f2;
-                //float d3 = (phases[2] + (float)k * 2.0f * E_PI) / 2.0f / f3;
-
                 float d1 = 0.734f / 2.0f / E_PI * (phases[0] + (float)i * 2.0f * E_PI) - 0.300f;
                 float d2 = 0.778f / 2.0f / E_PI * (phases[1] + (float)j * 2.0f * E_PI) - 0.357f;
                 float d3 = 2.866f / 2.0f / E_PI * (phases[2] + (float)k * 2.0f * E_PI) - 1.053f;
 
                 float d_mean = (d1 + d2 + d3) / 3.0f;
-                //float d_var = (powf(d1 - d_mean, 2.0f) + powf(d2 - d_mean, 2.0f) + powf(d3 - d_mean, 2.0f)) / 3.0f;
-                //float d_var = fabsf(d1 - d_mean) + fabsf(d2 - d_mean) + fabsf(d3 - d_mean);
                 float d_var = ((d1 - d_mean) * (d1 - d_mean) + (d2 - d_mean) * (d2 - d_mean) + (d3 - d_mean) * (d3 - d_mean)) / 3.0f;
-                //printf("%i,%i,%i: %f,%f,%f (%f)\n",
-                //    i, j, k, d1, d2, d3, sq_err);
                 // TODO: profile to see which of these is best
 #if 0
                 if (d_var < best_err)
                 {
                     best_err = d_var;
                     best_dist = d_mean;
-                    best_i = i;
-                    best_j = j;
-                    best_k = k;
-                }
+#                }
 #endif
 
 #if 1
                 best_dist = d_var < best_err ? d_mean : best_dist;
-                best_i = d_var < best_err ? i : best_i;
-                best_j = d_var < best_err ? j : best_j;
-                best_k = d_var < best_err ? k : best_k;
                 best_err = d_var < best_err ? d_var : best_err;
 #endif
             }
         }
     }
 
-    if (err)
-    {
-        *err = best_err;
-    }
-
-    //best_dist *= 300.0f / 2.0f / E_PI;      // c / 10e6 to account for freq in MHz
-
-    (void)best_i;
-    (void)best_j;
-    (void)best_k;
-    //printf("%i,%i,%i: %f (%f)\n", best_i, best_j, best_k, best_dist, best_err);
+    *err = best_err;
 
     return best_dist;
 }
@@ -138,6 +101,10 @@ __device__ static inline float GetNFOVDistance(const float* phases, float* err)
 #define PROFILE_START(a)
 #define PROFILE_END(a)
 #endif
+
+// buffer sizes
+const int NFOVUnbinned_in_count = 1024 * 576 * 9;
+const int NFOVUnbinned_out_count = 640 * 576;
 
 
 __global__ void NFOVUnbinnedKernel(unsigned short int* depth_out,
@@ -151,6 +118,7 @@ __global__ void NFOVUnbinnedKernel(unsigned short int* depth_out,
     int outidx = threadIdx.x + blockIdx.x * blockDim.x;
 
     const int frame_width = 640;
+    const int frame_height = 576;
 
     int x = outidx % frame_width;
     int y = outidx / frame_width;
@@ -183,14 +151,30 @@ __global__ void NFOVUnbinnedKernel(unsigned short int* depth_out,
     if (phases[2] < 0.0f) phases[2] += E_PI * 2.0f;
 
     PROFILE_START(3);
-    float dist = GetNFOVDistance(phases, NULL);
+    float err;
+    float dist = GetNFOVDistance(phases, &err);
     PROFILE_END(3);
     float irf = fabsf((offsets[0] + offsets[1] + offsets[2]) / 3.0f / dist / dist * 1000.0f);
 
     unsigned short int depth_val = (unsigned short int)(dist * 1000.0f); // mm distance
     unsigned short int ir_val = (unsigned short int)irf;
 
-    depth_out[outidx] = depth_val;
+    // Masking calculations
+
+    // First, NFOV uses circular lens mask
+    int mask_lens = (((float)x / (float)(frame_width / 2) - 1.0f) * ((float)x / (float)(frame_width / 2) - 1.0f) +
+        ((float)y / (float)(frame_height / 2) - 1.0f) * ((float)y / (float)(frame_height / 2) - 1.0f)) < 1.0f ? 1 : 0;
+
+    // Then variance in the output values
+    int mask_err = err < 0.01f ? 1 : 0;
+
+    // Finally, assume that the amplitude of the returned signal is inversely proportional to the square of
+    //  the distance
+    int mask_amp = ((amplitudes[0] + amplitudes[1] + amplitudes[2]) * dist * dist) < 200.0f ? 1 : 0;
+
+    unsigned short mask = (unsigned short)(mask_lens * mask_err * mask_amp);
+
+    depth_out[outidx] = depth_val * mask;
     ir_out[outidx] = ir_val;
 
     PROFILE_END(1);
@@ -204,10 +188,6 @@ unsigned short* dev_depth_out;
 unsigned int* dev_times1;
 unsigned int* dev_times2;
 unsigned int* dev_times3;
-
-// buffer sizes
-const int NFOVUnbinned_in_count = 1024 * 576 * 9;
-const int NFOVUnbinned_out_count = 640 * 576;
 
 const int nthreads = 128;
 
