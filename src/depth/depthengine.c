@@ -272,8 +272,15 @@ void depthengine_process_frame(k4a_capture_t capture_raw, const depthengine_t *d
     uint16_t *ir_data = (uint16_t *)image_get_buffer(ir_image);
     uint16_t *depth_data = (uint16_t *)image_get_buffer(depth_image);
 
-    //CPURunNFOVUnbinnedCalculation(depth_data, ir_data, image_get_buffer(image_raw), de->xbin, de->ybin);
-    RunNFOVUnbinnedCalculation(depth_data, ir_data, image_get_buffer(image_raw), de->xbin, de->ybin);
+    switch(de->dmode)
+    {
+        case K4A_DEPTH_MODE_NFOV_UNBINNED:
+            //CPURunNFOVUnbinnedCalculation(depth_data, ir_data, image_get_buffer(image_raw), de->xbin, de->ybin);
+            RunNFOVUnbinnedCalculation(depth_data, ir_data, image_get_buffer(image_raw), de->xbin, de->ybin);
+
+        default:
+            break;
+    }
     
     k4a_capture_t c;
     capture_create(&c);
