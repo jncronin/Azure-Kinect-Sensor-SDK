@@ -37,63 +37,54 @@ static inline int GetNFOVData(int x, int y, int frame, const uint8_t *restrict i
 
 static inline float GetNFOVDistance(const float *restrict phases, float *err)
 {
-    // determined experimentally by measuring phase == 0 points
-    // In MHz to allow calculations to better fit the dynamic range of floats
-    const float f1 = 199000000.0f / 1000000.0f;
-    const float f2 = 188000000.0f / 1000000.0f;
-    const float f3 = 55300000.0f / 1000000.0f;
+    /* Calibration gives us:
+        d1 = 0.734 * phase1 - 0.300 
+        d2 = 0.778 * phase2 - 0.150
+        d3 = 2.866 * phase3 - 1.053
+        
+        For max dist of 3.86m (as per data sheet), we get
+        max phase1 = 5.66 * 2pi
+        max phase2 = 5.42 * 2pi
+        max phase3 = 1.71 * 2pi */
 
-    // Gives ~5m max range
-    const int f1n = 4;
-    const int f2n = 4;
-    const int f3n = 2;
+    const int f1n = 5;
+    const int f2n = 5;
+    const int f3n = 1;
 
     float best_err = FLT_MAX;
     float best_dist = 0.0f;
 
-    int best_i = 0;
-    int best_j = 0;
-    int best_k = 0;
-
     // brute force algorithm as per https://medium.com/chronoptics-time-of-flight/phase-wrapping-and-its-solution-in-time-of-flight-depth-sensing-493aa8b21c42
-    for(int k = 0; k < f3n; k++)
+    for (int k = 0; k <= f3n; k++)
     {
-        for(int j = 0; j < f2n; j++)
+        for (int j = 0; j <= f2n; j++)
         {
-            for(int i = 0; i < f1n; i++)
+            for (int i = 0; i <= f1n; i++)
             {
-                float d1 = (phases[0] + (float)i * 2.0f * M_PI) / 2.0f / f1;
-                float d2 = (phases[1] + (float)j * 2.0f * M_PI) / 2.0f / f2;
-                float d3 = (phases[2] + (float)k * 2.0f * M_PI) / 2.0f / f3;
+                float d1 = 0.734f / 2.0f / M_PI * (phases[0] + (float)i * 2.0f * M_PI) - 0.300f;
+                float d2 = 0.778f / 2.0f / M_PI * (phases[1] + (float)j * 2.0f * M_PI) - 0.357f;
+                float d3 = 2.866f / 2.0f / M_PI * (phases[2] + (float)k * 2.0f * M_PI) - 1.053f;
 
                 float d_mean = (d1 + d2 + d3) / 3.0f;
-                float d_var = (powf(d1 - d_mean, 2.0f) + powf(d2 - d_mean, 2.0f) + powf(d3 - d_mean, 2.0f)) / 3.0f;
-
-                //printf("%i,%i,%i: %f,%f,%f (%f)\n",
-                //    i, j, k, d1, d2, d3, sq_err);
-                if(d_var < best_err)
+                float d_var = ((d1 - d_mean) * (d1 - d_mean) + (d2 - d_mean) * (d2 - d_mean) + (d3 - d_mean) * (d3 - d_mean)) / 3.0f;
+                // TODO: profile to see which of these is best
+#if 0
+                if (d_var < best_err)
                 {
                     best_err = d_var;
                     best_dist = d_mean;
-                    best_i = i;
-                    best_j = j;
-                    best_k = k;
-                }
+#                }
+#endif
+
+#if 1
+                best_dist = d_var < best_err ? d_mean : best_dist;
+                best_err = d_var < best_err ? d_var : best_err;
+#endif
             }
         }
     }
 
-    if(err)
-    {
-        *err = best_err;
-    }
-
-    best_dist *= 300.0f / 2.0f / M_PI;      // c / 10e6 to account for freq in MHz
-
-    (void)best_i;
-    (void)best_j;
-    (void)best_k;
-    //printf("%i,%i,%i: %f (%f)\n", best_i, best_j, best_k, best_dist, best_err);
+    *err = best_err;
 
     return best_dist;
 }
@@ -109,7 +100,7 @@ static inline void GetPhase(const float *restrict d, float *phase, float *amplit
 
     if(amplitude)
     {
-        float a = sqrtf(powf(d[0] - c, 2.0f) + powf(d[1] - c, 2.0f));
+        float a = sqrtf((d[0] - c) * (d[0] - c) + (d[1] - c) * (d[1] - c));
         *amplitude = a;
     }
 
@@ -130,14 +121,18 @@ void RunNFOVUnbinnedCalculation(unsigned short int* depth_out,
 void CPURunNFOVUnbinnedCalculation(unsigned short int* depth_out,
     unsigned short int* ir_out,
     const unsigned char* data,
-    const depthengine_t* de)
+    int xbin, int ybin)
 {
-    for(int y = 0; y < de->frame_height; y += de->ybin)
+    const int frame_width = 640;
+    const int frame_height = 576;
+
+    for(int y = 0; y < frame_height; y += ybin)
     {
-        for(int x = 0; x < de->frame_width; x += de->xbin)
+        for(int x = 0; x < frame_width; x += xbin)
         {
             float phases[3];
             float offsets[3];
+            float amplitudes[3];
             float d[9];
 
             for(int i = 0; i < 9; i++)
@@ -146,7 +141,7 @@ void CPURunNFOVUnbinnedCalculation(unsigned short int* depth_out,
             }
             for(int i = 0; i < 3; i++)
             {
-                GetPhase(&d[i * 3], &phases[i], NULL, &offsets[i]);
+                GetPhase(&d[i * 3], &phases[i], &amplitudes[i], &offsets[i]);
             }
             // Apply a fiddle factor based upon experimentation to account for time delay
             //  between imaging each column of the IR image
@@ -157,18 +152,38 @@ void CPURunNFOVUnbinnedCalculation(unsigned short int* depth_out,
             if(phases[1] < 0.0f) phases[1] += M_PI * 2.0f;
             if(phases[2] < 0.0f) phases[2] += M_PI * 2.0f;
 
-            float dist = GetNFOVDistance(phases, NULL);
+            float err;
+            float dist = GetNFOVDistance(phases, &err);
             //float dist = 1.0f;
             float irf = fabsf((offsets[0] + offsets[1] + offsets[2]) / 3.0f / dist / dist * 1000.0f);
             
             uint16_t depth_val = (uint16_t)(dist * 1000.0f); // mm distance
             uint16_t ir_val = (uint16_t)irf;
-            for(int j = 0; j < de->ybin; j++)
+
+            // Masking calculations
+
+            // First, NFOV uses circular lens mask
+            int mask_lens = (((float)x / (float)(frame_width / 2) - 1.0f) * ((float)x / (float)(frame_width / 2) - 1.0f) +
+                ((float)y / (float)(frame_height / 2) - 1.0f) * ((float)y / (float)(frame_height / 2) - 1.0f)) < 1.0f ? 1 : 0;
+
+            // Then variance in the output values
+            int mask_err = err < 0.01f ? 1 : 0;
+
+            // Finally, assume that the amplitude of the returned signal is inversely proportional to the square of
+            //  the distance
+            int mask_amp = ((amplitudes[0] + amplitudes[1] + amplitudes[2]) * dist * dist) < 200.0f ? 1 : 0;
+
+            unsigned short mask = (unsigned short)(mask_lens * mask_err * mask_amp);
+
+            depth_val *= mask;
+            ir_val *= mask_lens;
+
+            for(int j = 0; j < ybin; j++)
             {
-                for(int i = 0; i < de->xbin; i++)
+                for(int i = 0; i < xbin; i++)
                 {
-                    ir_out[x + i + (y + j) * de->frame_width] = ir_val;
-                    depth_out[x + i + (y + j) * de->frame_width] = depth_val;
+                    ir_out[x + i + (y + j) * frame_width] = ir_val;
+                    depth_out[x + i + (y + j) * frame_width] = depth_val;
                 }
             }
 
@@ -178,9 +193,10 @@ void CPURunNFOVUnbinnedCalculation(unsigned short int* depth_out,
         }
     }
 
-    // dump phase of middle pixel
+    // dump phase of mid-left, middle and mid-right pixel (for calibration purposes)
+    for(int i = 0; i < 3; i++)
     {
-        int x = 320;
+        int x = 160 + 160 * i;
         int y = 288;
 
         float phases[3];
@@ -195,16 +211,14 @@ void CPURunNFOVUnbinnedCalculation(unsigned short int* depth_out,
         {
             GetPhase(&d[i * 3], &phases[i], NULL, &offsets[i]);
         }
-        // Apply a fiddle factor based upon experimentation to account for time delay
-        //  between imaging each column of the IR image
-        phases[0] = fmodf(phases[0] - 2.7f * (float)x / 200.0f, M_PI * 2.0f);
-        phases[1] = fmodf(phases[1] - 2.55f * (float)x / 200.0f, M_PI * 2.0f);
-        phases[2] = fmodf(phases[2] - 1.05f * (float)x / 200.0f, M_PI * 2.0f);
+        phases[0] = fmodf(phases[0], M_PI * 2.0f);
+        phases[1] = fmodf(phases[1], M_PI * 2.0f);
+        phases[2] = fmodf(phases[2], M_PI * 2.0f);
         if(phases[0] < 0.0f) phases[0] += M_PI * 2.0f;
         if(phases[1] < 0.0f) phases[1] += M_PI * 2.0f;
         if(phases[2] < 0.0f) phases[2] += M_PI * 2.0f;
 
-        printf("P1: %f, P2: %f, P3: %f\n", phases[0], phases[1], phases[2]);
+        printf("(%i) P1: %f, P2: %f, P3: %f\n", i, phases[0], phases[1], phases[2]);
     }
 }
 
@@ -258,7 +272,7 @@ void depthengine_process_frame(k4a_capture_t capture_raw, const depthengine_t *d
     uint16_t *ir_data = (uint16_t *)image_get_buffer(ir_image);
     uint16_t *depth_data = (uint16_t *)image_get_buffer(depth_image);
 
-    //CPURunNFOVUnbinnedCalculation(depth_data, ir_data, image_get_buffer(image_raw), de);
+    //CPURunNFOVUnbinnedCalculation(depth_data, ir_data, image_get_buffer(image_raw), de->xbin, de->ybin);
     RunNFOVUnbinnedCalculation(depth_data, ir_data, image_get_buffer(image_raw), de->xbin, de->ybin);
     
     k4a_capture_t c;
