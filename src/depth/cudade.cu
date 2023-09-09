@@ -178,6 +178,7 @@ __global__ void NFOVUnbinnedKernel(unsigned short int* depth_out,
     unsigned short mask = (unsigned short)(mask_lens * mask_err * mask_amp);
 
     depth_val *= mask;
+    ir_val *= mask_lens;
 
     for(int j = 0; j < ybin; j++)
     {
