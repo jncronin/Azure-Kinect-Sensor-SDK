@@ -14,6 +14,10 @@
 
 #define DEWRAPPER_QUEUE_DEPTH ((uint32_t)2) // We should not need to store more than 1
 
+#ifndef M_PI
+#    define M_PI 3.14159265358979323846
+#endif
+
 
 #ifdef __cplusplus
 extern "C" {
@@ -32,6 +36,21 @@ static inline int GetNFOVData(int x, int y, int frame, const uint8_t *restrict i
     int d = (int)image[idx];
     if(d >= 64)
         d = 64 - d;
+    return d;
+}
+
+static inline int GetWFOVBinnedData(int x, int y, int frame, const uint8_t *restrict image)
+{
+    const int frame_width = 1024;
+    const int frame_height = 1024;
+    const int frame_stride = frame_width;
+    int offset = ((frame + 1) * 160) % frame_stride;
+    int line_idx = (offset + x) % frame_stride;
+    int idx = y * frame_stride + frame * frame_height * frame_stride + line_idx;
+
+    int d = (int)image[idx];
+    if (d >= 128)
+        d = 128 - d;
     return d;
 }
 
@@ -117,6 +136,15 @@ void RunNFOVUnbinnedCalculation(unsigned short int* depth_out,
     unsigned short int* ir_out,
     const unsigned char* data,
     int xbin, int ybin);
+
+void DeinitWFOVBinnedCalculation();
+void InitWFOVBinnedCalculation();
+void RunWFOVBinnedCalculation(unsigned short int* depth_out,
+    unsigned short int* ir_out,
+    const unsigned char* data,
+    int xbin, int ybin);
+
+
 
 void CPURunNFOVUnbinnedCalculation(unsigned short int* depth_out,
     unsigned short int* ir_out,
@@ -222,6 +250,40 @@ void CPURunNFOVUnbinnedCalculation(unsigned short int* depth_out,
     }
 }
 
+void CPURunWFOVBinnedPhaseDump(unsigned short int* depth_out,
+    unsigned short int* ir_out,
+    const unsigned char* data,
+    int xbin, int ybin)
+{
+    // dump phase of mid-left, middle and mid-right pixel (for calibration purposes)
+    for(int i = 0; i < 3; i++)
+    {
+        int x = 128 + 128 * i;
+        int y = 256;
+
+        float phases[3];
+        float offsets[3];
+        float d[9];
+
+        for(int i = 0; i < 9; i++)
+        {
+            d[i] = GetWFOVBinnedData(x, y, i, data);
+        }
+        for(int i = 0; i < 3; i++)
+        {
+            GetPhase(&d[i * 3], &phases[i], NULL, &offsets[i]);
+        }
+        phases[0] = fmodf(phases[0], M_PI * 2.0f);
+        phases[1] = fmodf(phases[1], M_PI * 2.0f);
+        phases[2] = fmodf(phases[2], M_PI * 2.0f);
+        if(phases[0] < 0.0f) phases[0] += M_PI * 2.0f;
+        if(phases[1] < 0.0f) phases[1] += M_PI * 2.0f;
+        if(phases[2] < 0.0f) phases[2] += M_PI * 2.0f;
+
+        printf("(%i) P1: %f, P2: %f, P3: %f\n", i, phases[0], phases[1], phases[2]);
+    }
+}
+
 void depthengine_process_frame(k4a_capture_t capture_raw, const depthengine_t *de)
 {
     k4a_image_t image_raw = capture_get_ir_image(capture_raw);
@@ -272,8 +334,20 @@ void depthengine_process_frame(k4a_capture_t capture_raw, const depthengine_t *d
     uint16_t *ir_data = (uint16_t *)image_get_buffer(ir_image);
     uint16_t *depth_data = (uint16_t *)image_get_buffer(depth_image);
 
-    //CPURunNFOVUnbinnedCalculation(depth_data, ir_data, image_get_buffer(image_raw), de->xbin, de->ybin);
-    RunNFOVUnbinnedCalculation(depth_data, ir_data, image_get_buffer(image_raw), de->xbin, de->ybin);
+    switch(de->dmode)
+    {
+        case K4A_DEPTH_MODE_NFOV_UNBINNED:
+            //CPURunNFOVUnbinnedCalculation(depth_data, ir_data, image_get_buffer(image_raw), de->xbin, de->ybin);
+            RunNFOVUnbinnedCalculation(depth_data, ir_data, image_get_buffer(image_raw), de->xbin, de->ybin);
+            break;
+
+        case K4A_DEPTH_MODE_WFOV_2X2BINNED:
+            CPURunWFOVBinnedPhaseDump(depth_data, ir_data, image_get_buffer(image_raw), de->xbin, de->ybin);
+            break;
+
+        default:
+            break;
+    }
     
     k4a_capture_t c;
     capture_create(&c);
@@ -365,6 +439,12 @@ void depthengine_start(depthengine_t *de, const k4a_device_configuration_t *conf
             InitNFOVUnbinnedCalculation();
             break;
 
+        case K4A_DEPTH_MODE_WFOV_2X2BINNED:
+            de->frame_width = 512;
+            de->frame_height = 512;
+            InitWFOVBinnedCalculation();
+            break;
+
         default:
             LOG_ERROR("Unsupported depth_mode %d", config->depth_mode);
             break;
@@ -421,6 +501,10 @@ void depthengine_stop(depthengine_t *de)
     {
         case K4A_DEPTH_MODE_NFOV_UNBINNED:
             DeinitNFOVUnbinnedCalculation();
+            break;
+
+        case K4A_DEPTH_MODE_WFOV_2X2BINNED:
+            DeinitWFOVBinnedCalculation();
             break;
 
         default:
