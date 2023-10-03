@@ -41,17 +41,21 @@ static inline int GetNFOVData(int x, int y, int frame, const uint8_t *restrict i
 
 static inline int GetWFOVBinnedData(int x, int y, int frame, const uint8_t *restrict image)
 {
-    const int frame_width = 1024;
-    const int frame_height = 1024;
-    const int frame_stride = frame_width;
-    int offset = ((frame + 1) * 160) % frame_stride;
-    int line_idx = (offset + x) % frame_stride;
-    int idx = y * frame_stride + frame * frame_height * frame_stride + line_idx;
+    int x_offset = (160 * (frame + 1)) % 512;
+    int src_x = x + x_offset;
+    if (src_x >= 512) src_x -= 512;
 
-    int d = (int)image[idx];
-    if (d >= 128)
-        d = 128 - d;
-    return d;
+    int pix_id = src_x + y * 512 + frame * 512 * 512;
+    int block_of_8 = pix_id / 5;
+    int block_id = pix_id % 5;
+    int src_id = block_of_8 * 8 + block_id;
+
+    int dval = (int)image[src_id];
+
+    // proc
+    if (dval >= 64) dval = 64 - dval;
+
+    return dval;
 }
 
 static inline float GetNFOVDistance(const float *restrict phases, float *err)
@@ -255,6 +259,11 @@ void CPURunWFOVBinnedPhaseDump(unsigned short int* depth_out,
     const unsigned char* data,
     int xbin, int ybin)
 {
+    (void)depth_out;
+    (void)ir_out;
+    (void)xbin;
+    (void)ybin;
+
     // dump phase of mid-left, middle and mid-right pixel (for calibration purposes)
     for(int i = 0; i < 3; i++)
     {
@@ -265,13 +274,13 @@ void CPURunWFOVBinnedPhaseDump(unsigned short int* depth_out,
         float offsets[3];
         float d[9];
 
-        for(int i = 0; i < 9; i++)
+        for(int j = 0; j < 9; j++)
         {
-            d[i] = GetWFOVBinnedData(x, y, i, data);
+            d[j] = GetWFOVBinnedData(x, y, j, data);
         }
-        for(int i = 0; i < 3; i++)
+        for(int j = 0; j < 3; j++)
         {
-            GetPhase(&d[i * 3], &phases[i], NULL, &offsets[i]);
+            GetPhase(&d[j * 3], &phases[j], NULL, &offsets[j]);
         }
         phases[0] = fmodf(phases[0], M_PI * 2.0f);
         phases[1] = fmodf(phases[1], M_PI * 2.0f);
@@ -343,6 +352,7 @@ void depthengine_process_frame(k4a_capture_t capture_raw, const depthengine_t *d
 
         case K4A_DEPTH_MODE_WFOV_2X2BINNED:
             CPURunWFOVBinnedPhaseDump(depth_data, ir_data, image_get_buffer(image_raw), de->xbin, de->ybin);
+            RunWFOVBinnedCalculation(depth_data, ir_data, image_get_buffer(image_raw), de->xbin, de->ybin);
             break;
 
         default:
