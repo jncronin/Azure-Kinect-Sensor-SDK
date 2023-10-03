@@ -106,6 +106,9 @@ __device__ static inline float GetNFOVDistance(const float* phases, float* err)
 const int NFOVUnbinned_in_count = 1024 * 576 * 9;
 const int NFOVUnbinned_out_count = 640 * 576;
 
+const int WFOVBinned_in_count = 3777232;
+const int WFOVBinned_out_count = 512 * 512;
+
 
 __global__ void NFOVUnbinnedKernel(unsigned short int* depth_out,
     unsigned short int* ir_out,
@@ -285,6 +288,21 @@ void InitNFOVUnbinnedCalculation()
 #endif
 }
 
+void InitWFOVBinnedCalculation()
+{
+    cudaSetDevice(0);
+    cudaMalloc(&dev_data, WFOVBinned_in_count * sizeof(unsigned char));
+    cudaMalloc(&dev_ir_out, WFOVBinned_out_count * sizeof(unsigned short int));
+    cudaMalloc(&dev_depth_out, WFOVBinned_out_count * sizeof(unsigned short int));
+
+#ifdef PROFILE
+    cudaMalloc(&dev_times1, WFOVBinned_out_count * sizeof(unsigned int));
+    cudaMalloc(&dev_times2, WFOVBinned_out_count * sizeof(unsigned int));
+    cudaMalloc(&dev_times3, WFOVBinned_out_count * sizeof(unsigned int));
+#endif
+}
+
+
 // Dealloc function
 void DeinitNFOVUnbinnedCalculation()
 {
@@ -323,5 +341,44 @@ void DeinitNFOVUnbinnedCalculation()
 #endif
 
 }
+
+void DeinitWFOVBinnedCalculation()
+{
+    if (dev_data)
+    {
+        cudaFree(dev_data);
+        dev_data = NULL;
+    }
+    if (dev_ir_out)
+    {
+        cudaFree(dev_ir_out);
+        dev_ir_out = NULL;
+    }
+    if (dev_depth_out)
+    {
+        cudaFree(dev_depth_out);
+        dev_depth_out = NULL;
+    }
+
+#if PROFILE
+    if (dev_times1)
+    {
+        cudaFree(dev_times1);
+        dev_times1 = NULL;
+    }
+    if (dev_times2)
+    {
+        cudaFree(dev_times2);
+        dev_times2 = NULL;
+    }
+    if (dev_times3)
+    {
+        cudaFree(dev_times3);
+        dev_times3 = NULL;
+    }
+#endif
+
+}
+
 
 }
