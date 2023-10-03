@@ -139,9 +139,9 @@ __device__ static inline float GetWFOVBinnedDistance(const float* phases, float*
         {
             for (int i = 0; i <= f1n; i++)
             {
-                float d1 = 781.6f / 2.0f / E_PI * (phases[0] + (float)i * 2.0f * E_PI) + 179.73f - 4.528f * x;
-                float d2 = 817.8f / 2.0f / E_PI * (phases[1] + (float)j * 2.0f * E_PI) + 68.11f - 4.204f * x;
-                float d3 = 3124.2f / 2.0f / E_PI * (phases[2] + (float)k * 2.0f * E_PI) + 538.74f - 10.39f * x;
+                float d1 = 779.0995f / 2.0f / E_PI * (phases[0] + (float)i * 2.0f * E_PI) - 74.3193f - 3.3783f * x;
+                float d2 = 824.3284f / 2.0f / E_PI * (phases[1] + (float)j * 2.0f * E_PI) - 93.5419f - 3.5326f * x;
+                float d3 = 2702.1864f / 2.0f / E_PI * (phases[2] + (float)k * 2.0f * E_PI) - 816.6109f - 3.1806f * x;
 
                 d1 /= 1000.0f;
                 d2 /= 1000.0f;
