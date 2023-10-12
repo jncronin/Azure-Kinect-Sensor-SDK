@@ -351,7 +351,9 @@ void depthengine_process_frame(k4a_capture_t capture_raw, const depthengine_t *d
             break;
 
         case K4A_DEPTH_MODE_WFOV_2X2BINNED:
+#ifndef NDEBUG
             CPURunWFOVBinnedPhaseDump(depth_data, ir_data, image_get_buffer(image_raw), de->xbin, de->ybin);
+#endif
             RunWFOVBinnedCalculation(depth_data, ir_data, image_get_buffer(image_raw), de->xbin, de->ybin);
             break;
 
