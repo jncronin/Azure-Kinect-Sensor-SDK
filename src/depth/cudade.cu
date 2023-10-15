@@ -127,7 +127,7 @@ __device__ static inline float GetWFOVBinnedDistance(const float* phases, float*
 
     const int f1n = 5;
     const int f2n = 5;
-    const int f3n = 1;
+    const int f3n = 2;
 
     float best_err = FLT_MAX;
     float best_dist = 0.0f;
@@ -337,7 +337,8 @@ __global__ void WFOVBinnedKernel(unsigned short int* depth_out,
 
     // Finally, assume that the amplitude of the returned signal is inversely proportional to the square of
     //  the distance
-    int mask_amp = ((amplitudes[0] + amplitudes[1] + amplitudes[2]) * dist * dist) < 200.0f ? 1 : 0;
+    float amp_dist = (amplitudes[0] + amplitudes[1] + amplitudes[2]) * dist * dist;
+    int mask_amp = (amp_dist >= 10.0f && amp_dist < 50.0f) ? 1 : 0;
 
     unsigned short mask = (unsigned short)(mask_lens * mask_err * mask_amp);
 
