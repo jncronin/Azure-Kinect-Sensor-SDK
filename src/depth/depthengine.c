@@ -1,4 +1,5 @@
 #include <k4a/k4aversion.h>
+#include <k4a/k4a_depth_standalone.h>
 #include <k4ainternal/depthengine.h>
 #include <k4ainternal/common.h>
 #include <k4ainternal/image.h>
@@ -133,22 +134,6 @@ static inline void GetPhase(const float *restrict d, float *phase, float *amplit
         *phase = b;
     }
 }
-
-void DeinitNFOVUnbinnedCalculation();
-void InitNFOVUnbinnedCalculation();
-void RunNFOVUnbinnedCalculation(unsigned short int* depth_out,
-    unsigned short int* ir_out,
-    const unsigned char* data,
-    int xbin, int ybin);
-
-void DeinitWFOVBinnedCalculation();
-void InitWFOVBinnedCalculation();
-void RunWFOVBinnedCalculation(unsigned short int* depth_out,
-    unsigned short int* ir_out,
-    const unsigned char* data,
-    int xbin, int ybin);
-
-
 
 void CPURunNFOVUnbinnedCalculation(unsigned short int* depth_out,
     unsigned short int* ir_out,

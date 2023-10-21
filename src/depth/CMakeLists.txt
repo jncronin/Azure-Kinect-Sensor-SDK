@@ -32,3 +32,12 @@ target_link_libraries(k4a_depth PUBLIC
 
 # Define alias for other targets to link against
 add_library(k4ainternal::depth ALIAS k4a_depth)
+
+# stand-alone depth library
+add_library(k4a_depth_standalone STATIC
+    cudade.cu)
+set_property(TARGET k4a_depth_standalone PROPERTY CUDA_STANDARD 14)
+
+target_link_libraries(k4a_depth_standalone PUBLIC
+    CUDA::cudart
+    CUDA::cuda_driver)
