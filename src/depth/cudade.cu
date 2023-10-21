@@ -398,15 +398,22 @@ void RunNFOVUnbinnedCalculation(unsigned short int* depth_out,
         return;
     }
 
-    cudaStatus = cudaMemcpy(depth_out, dev_depth_out, NFOVUnbinned_out_count * sizeof(unsigned short), cudaMemcpyDeviceToHost);
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "cudaMemcpy failed!");
-        return;
+    if(depth_out)
+    {
+        cudaStatus = cudaMemcpy(depth_out, dev_depth_out, NFOVUnbinned_out_count * sizeof(unsigned short), cudaMemcpyDeviceToHost);
+        if (cudaStatus != cudaSuccess) {
+            fprintf(stderr, "cudaMemcpy failed!");
+            return;
+        }
     }
-    cudaStatus = cudaMemcpy(ir_out, dev_ir_out, NFOVUnbinned_out_count * sizeof(unsigned short), cudaMemcpyDeviceToHost);
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "cudaMemcpy failed!");
-        return;
+
+    if(ir_out)
+    {
+        cudaStatus = cudaMemcpy(ir_out, dev_ir_out, NFOVUnbinned_out_count * sizeof(unsigned short), cudaMemcpyDeviceToHost);
+        if (cudaStatus != cudaSuccess) {
+            fprintf(stderr, "cudaMemcpy failed!");
+            return;
+        }
     }
 
 #if PROFILE
@@ -462,15 +469,22 @@ void RunWFOVBinnedCalculation(unsigned short int* depth_out,
         return;
     }
 
-    cudaStatus = cudaMemcpy(depth_out, dev_depth_out, WFOVBinned_out_count * sizeof(unsigned short), cudaMemcpyDeviceToHost);
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "cudaMemcpy failed!");
-        return;
+    if(depth_out)
+    {
+        cudaStatus = cudaMemcpy(depth_out, dev_depth_out, WFOVBinned_out_count * sizeof(unsigned short), cudaMemcpyDeviceToHost);
+        if (cudaStatus != cudaSuccess) {
+            fprintf(stderr, "cudaMemcpy failed!");
+            return;
+        }
     }
-    cudaStatus = cudaMemcpy(ir_out, dev_ir_out, WFOVBinned_out_count * sizeof(unsigned short), cudaMemcpyDeviceToHost);
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "cudaMemcpy failed!");
-        return;
+
+    if(ir_out)
+    {
+        cudaStatus = cudaMemcpy(ir_out, dev_ir_out, WFOVBinned_out_count * sizeof(unsigned short), cudaMemcpyDeviceToHost);
+        if (cudaStatus != cudaSuccess) {
+            fprintf(stderr, "cudaMemcpy failed!");
+            return;
+        }
     }
 
 #if PROFILE
