@@ -294,7 +294,8 @@ typedef enum
     K4A_DEPTH_MODE_NFOV_UNBINNED,  /**< Depth captured at 640x576. Passive IR is also captured at 640x576. */
     K4A_DEPTH_MODE_WFOV_2X2BINNED, /**< Depth captured at 512x512. Passive IR is also captured at 512x512. */
     K4A_DEPTH_MODE_WFOV_UNBINNED,  /**< Depth captured at 1024x1024. Passive IR is also captured at 1024x1024. */
-    K4A_DEPTH_MODE_PASSIVE_IR,     /**< Passive IR only, captured at 1024x1024. */
+    K4A_DEPTH_MODE_WFOV_2X2BINNED_UNPROCESSED, /**< Raw depth camera output at 512x512. */
+    K4A_DEPTH_MODE_PASSIVE_IR     /**< Passive IR only, captured at 1024x1024. */
 } k4a_depth_mode_t;
 
 /** Color sensor resolutions.

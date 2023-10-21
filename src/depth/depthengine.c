@@ -457,6 +457,10 @@ void depthengine_start(depthengine_t *de, const k4a_device_configuration_t *conf
             InitWFOVBinnedCalculation();
             break;
 
+        case K4A_DEPTH_MODE_WFOV_2X2BINNED_UNPROCESSED:
+            // do nothing
+            return;
+
         default:
             LOG_ERROR("Unsupported depth_mode %d", config->depth_mode);
             break;
@@ -498,6 +502,14 @@ void depthengine_create(depthengine_t *de, depthengine_cb_streaming_capture_t *c
 
 void depthengine_stop(depthengine_t *de)
 {
+    switch(de->dmode)
+    {
+        case K4A_DEPTH_MODE_WFOV_2X2BINNED_UNPROCESSED:
+            return;
+        default:
+            break;
+    }
+
     if(de->queue)
     {
         queue_stop(de->queue);

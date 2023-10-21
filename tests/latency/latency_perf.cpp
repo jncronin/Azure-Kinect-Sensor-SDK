@@ -200,6 +200,8 @@ static const char *get_string_from_depth_mode(k4a_depth_mode_t mode)
     case K4A_DEPTH_MODE_PASSIVE_IR:
         return "K4A_DEPTH_MODE_PASSIVE_IR";
         break;
+    case K4A_DEPTH_MODE_WFOV_2X2BINNED_UNPROCESSED:
+        return "K4A_DEPTH_MODE_WFOV_2X2BINNED_UNPROCESSED";
     }
     assert(0);
     return "Unknown Depth";

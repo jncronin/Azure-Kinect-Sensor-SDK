@@ -530,6 +530,7 @@ static const char *k4a_depth_mode_to_string(k4a_depth_mode_t depth_mode)
         K4A_DEPTH_MODE_TO_STRING_CASE(K4A_DEPTH_MODE_WFOV_2X2BINNED);
         K4A_DEPTH_MODE_TO_STRING_CASE(K4A_DEPTH_MODE_WFOV_UNBINNED);
         K4A_DEPTH_MODE_TO_STRING_CASE(K4A_DEPTH_MODE_PASSIVE_IR);
+        K4A_DEPTH_MODE_TO_STRING_CASE(K4A_DEPTH_MODE_WFOV_2X2BINNED_UNPROCESSED);
     }
     return "Unexpected k4a_depth_mode_t value.";
 }
@@ -764,6 +765,7 @@ static k4a_result_t validate_configuration(k4a_context_t *device, const k4a_devi
                 { K4A_DEPTH_MODE_NFOV_UNBINNED, K4A_FRAMES_PER_SECOND_30 },
                 { K4A_DEPTH_MODE_WFOV_2X2BINNED, K4A_FRAMES_PER_SECOND_30 },
                 { K4A_DEPTH_MODE_WFOV_UNBINNED, K4A_FRAMES_PER_SECOND_15 },
+                { K4A_DEPTH_MODE_WFOV_2X2BINNED_UNPROCESSED, K4A_FRAMES_PER_SECOND_30 },
                 { K4A_DEPTH_MODE_PASSIVE_IR, K4A_FRAMES_PER_SECOND_30 },
             };
 

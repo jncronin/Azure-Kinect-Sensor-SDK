@@ -279,7 +279,24 @@ void depth_capture_available(k4a_result_t cb_result, k4a_image_t image_raw, void
     }
 
     // post-capture goes here
-    depthengine_enqueue_frame(capture_raw, &depth->de);
+    switch(depth->de.dmode)
+    {
+        case K4A_DEPTH_MODE_NFOV_2X2BINNED:
+        case K4A_DEPTH_MODE_NFOV_UNBINNED:
+        case K4A_DEPTH_MODE_WFOV_2X2BINNED:
+        case K4A_DEPTH_MODE_WFOV_UNBINNED:
+            depthengine_enqueue_frame(capture_raw, &depth->de);
+            break;
+
+        case K4A_DEPTH_MODE_WFOV_2X2BINNED_UNPROCESSED:
+            depth->de.capture_ready_callback(K4A_RESULT_SUCCEEDED,
+                capture_raw,
+                depth->de.capture_ready_callback_context);
+            break;
+
+        default:
+            break;
+    }
 
     /*if (depth->capture_ready_cb)
     {

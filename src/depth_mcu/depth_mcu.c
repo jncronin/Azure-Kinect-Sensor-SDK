@@ -261,6 +261,7 @@ k4a_result_t depthmcu_depth_set_capture_mode(depthmcu_t depthmcu_handle, k4a_dep
         depthmcu->mode_size = SENSOR_MODE_LONG_THROW_NATIVE_SIZE;
         break;
     case K4A_DEPTH_MODE_WFOV_2X2BINNED:
+    case K4A_DEPTH_MODE_WFOV_2X2BINNED_UNPROCESSED:
         mode = SENSOR_MODE_QUARTER_MEGA_PIXEL;
         depthmcu->payload_size = SENSOR_MODE_QUARTER_MEGA_PIXEL_PAYLOAD_SIZE;
         depthmcu->mode_size = SENSOR_MODE_QUARTER_MEGA_PIXEL_SIZE;
