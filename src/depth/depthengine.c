@@ -352,6 +352,10 @@ void depthengine_process_frame(k4a_capture_t capture_raw, const depthengine_t *d
         image_get_device_timestamp_usec(image_raw));
     image_set_system_timestamp_nsec(ir_image,
         image_get_system_timestamp_nsec(image_raw));
+    image_set_device_timestamp_usec(depth_image,
+        image_get_device_timestamp_usec(image_raw));
+    image_set_system_timestamp_nsec(depth_image,
+        image_get_system_timestamp_nsec(image_raw));
     capture_set_ir_image(c, ir_image);
     capture_set_depth_image(c, depth_image);
 

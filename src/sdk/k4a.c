@@ -45,6 +45,9 @@ typedef struct _k4a_context_t
     color_t color;
     depth_t depth;
 
+    uint64_t last_color_device_timestamp_usec;
+    uint64_t last_color_system_timestamp_nsec;
+
     bool depth_started;
     bool color_started;
     bool imu_started;
@@ -95,6 +98,30 @@ void depth_capture_ready(k4a_result_t result, k4a_capture_t capture_handle, void
     k4a_device_t device_handle = (k4a_device_t)callback_context;
     RETURN_VALUE_IF_HANDLE_INVALID(VOID_VALUE, k4a_device_t, device_handle);
     k4a_context_t *device = k4a_device_t_get_context(device_handle);
+
+#if 1
+    if(device->last_color_device_timestamp_usec)
+    {
+        k4a_image_t depth_img = k4a_capture_get_depth_image(capture_handle);
+        if(depth_img)
+        {
+            k4a_image_set_device_timestamp_usec(depth_img,
+                device->last_color_device_timestamp_usec +
+                    (k4a_image_get_system_timestamp_nsec(depth_img) - device->last_color_system_timestamp_nsec) / 1000ULL);
+            k4a_image_release(depth_img);
+        }
+
+        k4a_image_t ir_img = k4a_capture_get_ir_image(capture_handle);
+        if(ir_img)
+        {
+            k4a_image_set_device_timestamp_usec(ir_img,
+                device->last_color_device_timestamp_usec +
+                    (k4a_image_get_system_timestamp_nsec(ir_img) - device->last_color_system_timestamp_nsec) / 1000ULL);
+            k4a_image_release(ir_img);
+        }
+    }
+#endif
+
     capturesync_add_capture(device->capturesync, result, capture_handle, DEPTH_CAPTURE);
 }
 
@@ -103,6 +130,17 @@ void color_capture_ready(k4a_result_t result, k4a_capture_t capture_handle, void
     k4a_device_t device_handle = (k4a_device_t)callback_context;
     RETURN_VALUE_IF_HANDLE_INVALID(VOID_VALUE, k4a_device_t, device_handle);
     k4a_context_t *device = k4a_device_t_get_context(device_handle);
+
+#if 1
+    k4a_image_t col_img = k4a_capture_get_color_image(capture_handle);
+    if(col_img)
+    {
+        device->last_color_device_timestamp_usec = k4a_image_get_device_timestamp_usec(col_img);
+        device->last_color_system_timestamp_nsec = k4a_image_get_system_timestamp_nsec(col_img);
+        k4a_image_release(col_img);
+    }
+#endif
+
     capturesync_add_capture(device->capturesync, result, capture_handle, COLOR_CAPTURE);
 }
 
@@ -119,6 +157,10 @@ k4a_result_t k4a_device_open(uint32_t index, k4a_device_t *device_handle)
     allocator_initialize();
 
     device = k4a_device_t_create(&handle);
+
+    device->last_color_device_timestamp_usec = 0ULL;
+    device->last_color_system_timestamp_nsec = 0ULL;
+
     result = K4A_RESULT_FROM_BOOL(device != NULL);
 
     if (K4A_SUCCEEDED(result))
