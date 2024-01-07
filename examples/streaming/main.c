@@ -41,7 +41,7 @@ int main(int argc, char **argv)
     k4a_device_configuration_t config = K4A_DEVICE_CONFIG_INIT_DISABLE_ALL;
     config.color_format = K4A_IMAGE_FORMAT_COLOR_MJPG;
     config.color_resolution = K4A_COLOR_RESOLUTION_2160P;
-    config.depth_mode = K4A_DEPTH_MODE_NFOV_UNBINNED;
+    config.depth_mode = K4A_DEPTH_MODE_NFOV_UNBINNED_UNPROCESSED;
     config.camera_fps = K4A_FRAMES_PER_SECOND_30;
 
     if (K4A_RESULT_SUCCEEDED != k4a_device_start_cameras(device, &config))
@@ -93,6 +93,14 @@ int main(int argc, char **argv)
                    k4a_image_get_height_pixels(image),
                    k4a_image_get_width_pixels(image),
                    k4a_image_get_stride_bytes(image));
+
+            static int irid = 0;
+            char fname[32];
+            sprintf(fname, "ir-%i.data", irid++);
+            FILE *f = fopen(fname, "wb");
+            fwrite(k4a_image_get_buffer(image), 1, k4a_image_get_size(image), f);
+            fclose(f);
+
             k4a_image_release(image);
         }
         else
@@ -108,6 +116,15 @@ int main(int argc, char **argv)
                    k4a_image_get_height_pixels(image),
                    k4a_image_get_width_pixels(image),
                    k4a_image_get_stride_bytes(image));
+
+            static int did = 0;
+
+            char fname[32];
+            sprintf(fname, "depth-%i.data", did++);
+            FILE *f = fopen(fname, "wb");
+            fwrite(k4a_image_get_buffer(image), 1, k4a_image_get_size(image), f);
+            fclose(f);
+
             k4a_image_release(image);
         }
         else

@@ -313,6 +313,9 @@ void depthengine_process_frame(k4a_capture_t capture_raw, const depthengine_t *d
         Anyhow, for NFOV unbinned the image stride is 1024 pixels, and 1024 * 5/8 = 640 which
         seems to fit.
 
+        It is potentially a variation on MSI RAW12 with the 12th bit always zero.  Packed such that
+            5 pixels occupy 8 bytes.
+
         Also, the results are better if all of those values >= 64 are treated as negative,
          but an odd negative (not 1- or 2-complement).  We use the transform if(d>= 64) d = 64 - d
     
@@ -345,19 +348,36 @@ void depthengine_process_frame(k4a_capture_t capture_raw, const depthengine_t *d
         default:
             break;
     }
+
+    /* Get some metadata about the image */
+    float sensor_temp = 0.0f;
+    uint64_t dev_ts_ticks = 0ULL;
+
+    switch(de->dmode)
+    {
+        case K4A_DEPTH_MODE_NFOV_UNBINNED:
+            /* metadata is 40 bytes at end of image */
+            {
+                dev_ts_ticks = *(uint64_t *)&image_get_buffer(image_raw)[(1024 * 576 + 256) * 9 + 8];
+                sensor_temp = *(float *)&image_get_buffer(image_raw)[(1024 * 576 + 256) * 9 + 16];
+            }
+            break;
+        
+        default:
+            break;
+    }
     
     k4a_capture_t c;
     capture_create(&c);
-    image_set_device_timestamp_usec(ir_image,
-        image_get_device_timestamp_usec(image_raw));
+    image_set_device_timestamp_usec(ir_image, K4A_90K_HZ_TICK_TO_USEC(dev_ts_ticks));
     image_set_system_timestamp_nsec(ir_image,
         image_get_system_timestamp_nsec(image_raw));
-    image_set_device_timestamp_usec(depth_image,
-        image_get_device_timestamp_usec(image_raw));
+    image_set_device_timestamp_usec(depth_image, K4A_90K_HZ_TICK_TO_USEC(dev_ts_ticks));
     image_set_system_timestamp_nsec(depth_image,
         image_get_system_timestamp_nsec(image_raw));
     capture_set_ir_image(c, ir_image);
     capture_set_depth_image(c, depth_image);
+    capture_set_temperature_c(c, sensor_temp);
 
     de->capture_ready_callback(cb_result, c, de->capture_ready_callback_context);
     capture_dec_ref(capture_raw);
