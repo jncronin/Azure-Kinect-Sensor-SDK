@@ -29,10 +29,11 @@ __device__ float GetNFOVData(int x, int y, int frame, const unsigned char* image
     const int frame_width = 640;
     const int frame_height = 576;
     const int frame_stride = frame_width * 8 / 5;
-    int offset = ((frame + 1) % 4) * frame_stride / 4;
+    const int metadata_length = 256;
+    int offset = (frame_height * frame_stride + metadata_length) * frame + metadata_length +
+        y * frame_stride;
     int block_of_8 = x / 5;
-    int line_idx = offset + block_of_8 * 8 + x % 5;
-    int idx = y * frame_stride + frame * frame_height * frame_stride + line_idx;
+    int idx = offset + block_of_8 * 8 + x % 5;
 
     int d = (int)image[idx];
     if (d >= 64)
