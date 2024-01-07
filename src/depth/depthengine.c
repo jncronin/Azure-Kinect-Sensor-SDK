@@ -447,6 +447,7 @@ void depthengine_start(depthengine_t *de, const k4a_device_configuration_t *conf
             break;
 
         case K4A_DEPTH_MODE_WFOV_2X2BINNED_UNPROCESSED:
+        case K4A_DEPTH_MODE_NFOV_UNBINNED_UNPROCESSED:
             // do nothing
             return;
 
@@ -494,6 +495,7 @@ void depthengine_stop(depthengine_t *de)
     switch(de->dmode)
     {
         case K4A_DEPTH_MODE_WFOV_2X2BINNED_UNPROCESSED:
+        case K4A_DEPTH_MODE_NFOV_UNBINNED_UNPROCESSED:
             return;
         default:
             break;

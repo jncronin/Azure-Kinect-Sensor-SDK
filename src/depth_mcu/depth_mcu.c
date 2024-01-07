@@ -256,6 +256,7 @@ k4a_result_t depthmcu_depth_set_capture_mode(depthmcu_t depthmcu_handle, k4a_dep
     {
     case K4A_DEPTH_MODE_NFOV_2X2BINNED:
     case K4A_DEPTH_MODE_NFOV_UNBINNED:
+    case K4A_DEPTH_MODE_NFOV_UNBINNED_UNPROCESSED:
         mode = SENSOR_MODE_LONG_THROW_NATIVE;
         depthmcu->payload_size = SENSOR_MODE_LONG_THROW_NATIVE_PAYLOAD_SIZE;
         depthmcu->mode_size = SENSOR_MODE_LONG_THROW_NATIVE_SIZE;

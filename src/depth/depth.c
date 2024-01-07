@@ -289,6 +289,7 @@ void depth_capture_available(k4a_result_t cb_result, k4a_image_t image_raw, void
             break;
 
         case K4A_DEPTH_MODE_WFOV_2X2BINNED_UNPROCESSED:
+        case K4A_DEPTH_MODE_NFOV_UNBINNED_UNPROCESSED:
             depth->de.capture_ready_callback(K4A_RESULT_SUCCEEDED,
                 capture_raw,
                 depth->de.capture_ready_callback_context);
