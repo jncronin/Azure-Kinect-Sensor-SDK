@@ -522,7 +522,7 @@ void InitNFOVUnbinnedCalculation()
     cudaMalloc(&dev_ir_out, NFOVUnbinned_out_count * sizeof(unsigned short int));
     cudaMalloc(&dev_depth_out, NFOVUnbinned_out_count * sizeof(unsigned short int));
 
-#ifdef PROFILE
+#if PROFILE
     cudaMalloc(&dev_times1, NFOVUnbinned_out_count * sizeof(unsigned int));
     cudaMalloc(&dev_times2, NFOVUnbinned_out_count * sizeof(unsigned int));
     cudaMalloc(&dev_times3, NFOVUnbinned_out_count * sizeof(unsigned int));
@@ -536,7 +536,7 @@ void InitWFOVBinnedCalculation()
     cudaMalloc(&dev_ir_out, WFOVBinned_out_count * sizeof(unsigned short int));
     cudaMalloc(&dev_depth_out, WFOVBinned_out_count * sizeof(unsigned short int));
 
-#ifdef PROFILE
+#if PROFILE
     cudaMalloc(&dev_times1, WFOVBinned_out_count * sizeof(unsigned int));
     cudaMalloc(&dev_times2, WFOVBinned_out_count * sizeof(unsigned int));
     cudaMalloc(&dev_times3, WFOVBinned_out_count * sizeof(unsigned int));
