@@ -63,10 +63,10 @@ __device__ float GetWFOVBinnedData(int x, int y, int frame, const unsigned char*
 __device__ static inline float GetNFOVDistance(const float* phases, float* err, float x)
 {
     /* Calibration using node_calib and associated r script:
-            p        c0         c1            c2 min.idx max.idx
-            1 0 0.7618528  0.5523268 -0.0022633219       0       6
-            2 1 0.7824560  0.5063031 -0.0021119791       0       6
-            3 2 2.7980018 -0.4306281 -0.0006160847       0       3
+            p        c0         c1            c2    min.idx max.idx
+            1 0 0.7618528  0.5523268 -0.0022633219       -1       6
+            2 1 0.7824560  0.5063031 -0.0021119791       -1       6
+            3 2 2.7980018 -0.4306281 -0.0006160847        0       3
     */
 
     const int f1n = 6;
@@ -80,9 +80,9 @@ __device__ static inline float GetNFOVDistance(const float* phases, float* err, 
     // brute force algorithm as per https://medium.com/chronoptics-time-of-flight/phase-wrapping-and-its-solution-in-time-of-flight-depth-sensing-493aa8b21c42
     for (int k = 0; k < f3n; k++)
     {
-        for (int j = 0; j < f2n; j++)
+        for (int j = -1; j < f2n; j++)
         {
-            for (int i = 0; i < f1n; i++)
+            for (int i = -1; i < f1n; i++)
             {
                 float p0 = phases[0] / 2.0f / E_PI + (float)i;
                 float p1 = phases[1] / 2.0f / E_PI + (float)j;
