@@ -239,7 +239,7 @@ __global__ void NFOVUnbinnedKernel(unsigned short int* depth_out,
     float err;
     float dist = GetNFOVDistance(phases, &err);
     PROFILE_END(3);
-    float irf = fabsf((offsets[0] + offsets[1] + offsets[2]) / 3.0f / dist / dist * 1000.0f);
+    float irf = fabsf((offsets[0] + offsets[1] + offsets[2] - amplitudes[0] - amplitudes[1] - amplitudes[2]) / 3.0f / dist / dist * 1000.0f);
 
     unsigned short int depth_val = (unsigned short int)(dist * 1000.0f); // mm distance
     unsigned short int ir_val = (unsigned short int)irf;
