@@ -122,9 +122,6 @@ k4a_result_t k4a_device_open(uint32_t index, k4a_device_t *device_handle)
 
     device = k4a_device_t_create(&handle);
 
-    device->last_color_device_timestamp_usec = 0ULL;
-    device->last_color_system_timestamp_nsec = 0ULL;
-
     result = K4A_RESULT_FROM_BOOL(device != NULL);
 
     if (K4A_SUCCEEDED(result))
