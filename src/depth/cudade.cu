@@ -60,35 +60,37 @@ __device__ float GetWFOVBinnedData(int x, int y, int frame, const unsigned char*
     return dval;
 }
 
-__device__ static inline float GetNFOVDistance(const float* phases, float* err)
+__device__ static inline float GetNFOVDistance(const float* phases, float* err, float x)
 {
-    /* Calibration gives us:
-        d1 = 0.734 * phase1 - 0.300 
-        d2 = 0.778 * phase2 - 0.150
-        d3 = 2.866 * phase3 - 1.053
-        
-        For max dist of 3.86m (as per data sheet), we get
-        max phase1 = 5.66 * 2pi
-        max phase2 = 5.42 * 2pi
-        max phase3 = 1.71 * 2pi */
+    /* Calibration using node_calib and associated r script:
+            p        c0         c1            c2 min.idx max.idx
+            1 0 0.7618528  0.5523268 -0.0022633219       0       6
+            2 1 0.7824560  0.5063031 -0.0021119791       0       6
+            3 2 2.7980018 -0.4306281 -0.0006160847       0       3
+    */
 
-    const int f1n = 5;
-    const int f2n = 5;
-    const int f3n = 1;
+    const int f1n = 6;
+    const int f2n = 6;
+    const int f3n = 3;
 
     float best_err = FLT_MAX;
     float best_dist = 0.0f;
 
+
     // brute force algorithm as per https://medium.com/chronoptics-time-of-flight/phase-wrapping-and-its-solution-in-time-of-flight-depth-sensing-493aa8b21c42
-    for (int k = 0; k <= f3n; k++)
+    for (int k = 0; k < f3n; k++)
     {
-        for (int j = 0; j <= f2n; j++)
+        for (int j = 0; j < f2n; j++)
         {
-            for (int i = 0; i <= f1n; i++)
+            for (int i = 0; i < f1n; i++)
             {
-                float d1 = 0.734f / 2.0f / E_PI * (phases[0] + (float)i * 2.0f * E_PI) - 0.300f;
-                float d2 = 0.778f / 2.0f / E_PI * (phases[1] + (float)j * 2.0f * E_PI) - 0.357f;
-                float d3 = 2.866f / 2.0f / E_PI * (phases[2] + (float)k * 2.0f * E_PI) - 1.053f;
+                float p0 = phases[0] / 2.0f / E_PI + (float)i;
+                float p1 = phases[1] / 2.0f / E_PI + (float)j;
+                float p2 = phases[2] / 2.0f / E_PI + (float)k;
+
+                float d1 = 0.7618528f * (p0 + 0.5523268f -0.0022633219f * x);
+                float d2 = 0.7824560f * (p1 + 0.5063031f -0.0021119791 * x);
+                float d3 = 2.7980018f * (p2 -0.4306281f -0.0006160847f * x);
 
                 float d_mean = (d1 + d2 + d3) / 3.0f;
                 float d_var = ((d1 - d_mean) * (d1 - d_mean) + (d2 - d_mean) * (d2 - d_mean) + (d3 - d_mean) * (d3 - d_mean)) / 3.0f;
@@ -226,18 +228,13 @@ __global__ void NFOVUnbinnedKernel(unsigned short int* depth_out,
     }
     PROFILE_END(2);
 
-    // Apply a fiddle factor based upon experimentation to account for time delay
-    //  between imaging each column of the IR image
-    phases[0] = fmodf(phases[0] - 2.7f * (float)x / 200.0f, E_PI * 2.0f);
-    phases[1] = fmodf(phases[1] - 2.55f * (float)x / 200.0f, E_PI * 2.0f);
-    phases[2] = fmodf(phases[2] - 1.05f * (float)x / 200.0f, E_PI * 2.0f);
     if (phases[0] < 0.0f) phases[0] += E_PI * 2.0f;
     if (phases[1] < 0.0f) phases[1] += E_PI * 2.0f;
     if (phases[2] < 0.0f) phases[2] += E_PI * 2.0f;
 
     PROFILE_START(3);
     float err;
-    float dist = GetNFOVDistance(phases, &err);
+    float dist = GetNFOVDistance(phases, &err, (float)x);
     PROFILE_END(3);
     float irf = fabsf((offsets[0] + offsets[1] + offsets[2] - amplitudes[0] - amplitudes[1] - amplitudes[2]) / 3.0f / dist / dist * 1000.0f);
 
@@ -251,11 +248,12 @@ __global__ void NFOVUnbinnedKernel(unsigned short int* depth_out,
         ((float)y / (float)(frame_height / 2) - 1.0f) * ((float)y / (float)(frame_height / 2) - 1.0f)) < 1.0f ? 1 : 0;
 
     // Then variance in the output values
-    int mask_err = err < 0.05f ? 1 : 0;
+    int mask_err = err < 0.01f ? 1 : 0;
 
     // Finally, assume that the amplitude of the returned signal is inversely proportional to the square of
     //  the distance
-    int mask_amp = ((amplitudes[0] + amplitudes[1] + amplitudes[2]) * dist * dist) < 200.0f ? 1 : 0;
+    float amp_dist = (amplitudes[0] + amplitudes[1] + amplitudes[2]) * dist * dist;
+    int mask_amp = (amp_dist >= 10.0f && amp_dist < 50.0f) ? 1 : 0;
 
     unsigned short mask = (unsigned short)(mask_lens * mask_err * mask_amp);
 
